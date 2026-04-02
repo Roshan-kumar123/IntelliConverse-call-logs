@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/auth-api/:path*",
+      "destination": "https://prod.ic6e.aionos.ai/:path*"
+    },
+    {
       "source": "/api/:path*",
       "destination": "https://prod.routesvr6e.aionos.ai/api/:path*"
     },

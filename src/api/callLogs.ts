@@ -1,12 +1,19 @@
-import { BEARER_TOKEN, AUDIT_CATEGORY } from '../config';
+import { AUDIT_CATEGORY } from '../config';
 import type { CallLogsResponse, CallDetail, CallLogsParams } from '../types';
 
 const API_BASE = '/api/audit-analytics';
 
+// Token is set at login time via setAuthToken()
+let _token = '';
+
+export function setAuthToken(token: string) {
+  _token = token;
+}
+
 function buildHeaders(): HeadersInit {
   return {
     accept: 'application/json, text/plain, */*',
-    authorization: `Bearer ${BEARER_TOKEN}`,
+    authorization: `Bearer ${_token}`,
     'ngrok-skip-browser-warning': 'true',
   };
 }
@@ -72,7 +79,6 @@ export async function fetchPresignedUrl(analyticsId: string): Promise<string> {
     const json = JSON.parse(text);
     return typeof json === 'string' ? json : (json.url ?? json.presignedUrl ?? text);
   } catch {
-    // If the text looks like a URL, return it; otherwise treat as binary error
     if (text.trim().startsWith('http')) return text.trim();
     throw new Error('Audio format not supported');
   }
