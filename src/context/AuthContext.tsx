@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useCallback } from 'react';
 
 interface AuthUser {
   name: string;
@@ -75,17 +75,15 @@ async function doLogin(email: string, password: string): Promise<AuthUser> {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  // Restore session from localStorage on mount
-  useEffect(() => {
+  // Read from localStorage synchronously during initial render — no useEffect delay
+  const [user, setUser] = useState<AuthUser | null>(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) setUser(JSON.parse(stored));
+      if (stored) return JSON.parse(stored) as AuthUser;
     } catch { /* ignore */ }
-    setLoading(false);
-  }, []);
+    return null;
+  });
+  const [loading] = useState(false); // no async loading needed — read is synchronous
 
   const login = useCallback(async (email: string, password: string) => {
     const authUser = await doLogin(email, password);

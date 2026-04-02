@@ -3,8 +3,17 @@ import type { CallLogsResponse, CallDetail, CallLogsParams } from '../types';
 
 const API_BASE = '/api/audit-analytics';
 
-// Token is set at login time via setAuthToken()
-let _token = '';
+// Read token synchronously on module load so the very first API call has it,
+// before any React useEffect has run.
+function readStoredToken(): string {
+  try {
+    const stored = localStorage.getItem('ic_auth_user');
+    if (stored) return (JSON.parse(stored) as { accessToken?: string }).accessToken ?? '';
+  } catch { /* ignore */ }
+  return '';
+}
+
+let _token = readStoredToken();
 
 export function setAuthToken(token: string) {
   _token = token;
