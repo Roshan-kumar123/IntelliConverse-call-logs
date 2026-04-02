@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { setAuthToken } from './api/callLogs';
 import { Header } from './components/layout/Header';
@@ -10,11 +10,19 @@ import { Loader2 } from 'lucide-react';
 
 function AppRoutes() {
   const { user, loading } = useAuth();
+  const navigate = useNavigate();
 
   // Keep the API module token in sync with the auth context
   useEffect(() => {
     setAuthToken(user?.accessToken ?? '');
   }, [user]);
+
+  // When user logs out, reset URL to root
+  useEffect(() => {
+    if (!loading && !user) {
+      navigate('/', { replace: true });
+    }
+  }, [user, loading, navigate]);
 
   if (loading) {
     return (

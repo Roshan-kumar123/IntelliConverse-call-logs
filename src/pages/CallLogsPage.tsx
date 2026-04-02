@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { PhoneCall, AlertCircle, RefreshCw } from 'lucide-react';
 import { FilterBar } from '../components/callLogs/FilterBar';
 import { CallLogsTable } from '../components/callLogs/CallLogsTable';
@@ -6,6 +6,8 @@ import { Pagination } from '../components/callLogs/Pagination';
 import { CallDetailDrawer } from '../components/callDetail/CallDetailDrawer';
 import { CallDetailModal } from '../components/callDetail/CallDetailModal';
 import { useCallLogs } from '../hooks/useCallLogs';
+import { fetchCallDetail } from '../api/callLogs';
+import type { CallLog } from '../types';
 
 export function CallLogsPage() {
   // Filter state
@@ -14,9 +16,8 @@ export function CallLogsPage() {
   const [isMobile, setIsMobile] = useState(true);
   const [selectedIntents, setSelectedIntents] = useState<string[]>([]);
 
-  // Applied (committed) filter state — only changes on Search/Refresh
+  // Applied filters for the list API
   const [appliedFilters, setAppliedFilters] = useState({
-    search: '',
     mobileNumber: '',
     isMobile: true,
     intents: '',
@@ -26,17 +27,20 @@ export function CallLogsPage() {
   const [pageNumber, setPageNumber] = useState(0);
   const [pageSize, setPageSize] = useState(10);
 
-  // Drawer state: ID of call currently open in sidebar
+  // ID search state — when set, bypasses the list and shows a single result
+  const [idSearchResult, setIdSearchResult] = useState<CallLog[] | null>(null);
+  const [idSearchLoading, setIdSearchLoading] = useState(false);
+  const [idSearchError, setIdSearchError] = useState<string | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Drawer / modal state
   const [drawerCallId, setDrawerCallId] = useState<string | null>(null);
-  // Modal state: ID of call currently open in popup
   const [modalCallId, setModalCallId] = useState<string | null>(null);
-  // Last visited: highlighted row after close (whichever was closed last)
   const [lastVisitedId, setLastVisitedId] = useState<string | null>(null);
 
-  // The "active" id is whichever is currently open (drawer takes priority for row highlight)
   const activeCallId = drawerCallId ?? modalCallId;
 
-  const { data, loading, error, refetch } = useCallLogs({
+  const { data, loading: listLoading, error: listError, refetch } = useCallLogs({
     pageNumber,
     pageSize,
     intents: appliedFilters.intents,
@@ -45,20 +49,71 @@ export function CallLogsPage() {
     alfursanId: '',
   });
 
+  // Debounced ID search — calls the detail API directly
+  const handleIdDebounce = useCallback((id: string) => {
+    setIdSearchError(null);
+    if (!id) {
+      setIdSearchResult(null);
+      return;
+    }
+    setIdSearchLoading(true);
+    setIdSearchResult(null);
+    fetchCallDetail(id)
+      .then((detail) => {
+        setIdSearchResult([detail as unknown as CallLog]);
+        setIdSearchLoading(false);
+      })
+      .catch((err) => {
+        setIdSearchResult([]);
+        setIdSearchError(err.message || 'No call found with that ID');
+        setIdSearchLoading(false);
+      });
+  }, []);
+
+  function handleSearchChange(v: string) {
+    setSearch(v);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      handleIdDebounce(v.trim());
+    }, 500);
+  }
+
+  // Clear ID search when field is emptied
+  useEffect(() => {
+    if (!search.trim()) {
+      setIdSearchResult(null);
+      setIdSearchError(null);
+    }
+  }, [search]);
+
   const applySearch = useCallback(() => {
+    // If there's text in the ID box, treat Search button as "search by ID now"
+    if (search.trim()) {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      handleIdDebounce(search.trim());
+      return;
+    }
+    setIdSearchResult(null);
     setAppliedFilters({
-      search,
       mobileNumber,
       isMobile,
       intents: selectedIntents.join(','),
     });
     setPageNumber(0);
-  }, [search, mobileNumber, isMobile, selectedIntents]);
+  }, [search, mobileNumber, isMobile, selectedIntents, handleIdDebounce]);
 
   const handleRefresh = useCallback(() => {
-    applySearch();
-    refetch();
-  }, [applySearch, refetch]);
+    if (search.trim()) {
+      handleIdDebounce(search.trim());
+    } else {
+      setAppliedFilters({
+        mobileNumber,
+        isMobile,
+        intents: selectedIntents.join(','),
+      });
+      refetch();
+    }
+  }, [search, mobileNumber, isMobile, selectedIntents, handleIdDebounce, refetch]);
 
   const handlePageChange = (page: number) => setPageNumber(page);
   const handlePageSizeChange = (size: number) => {
@@ -66,13 +121,11 @@ export function CallLogsPage() {
     setPageNumber(0);
   };
 
-  // Row click (or eye icon) → open sidebar drawer
   const handleRowClick = (id: string) => {
     setModalCallId(null);
     setDrawerCallId(id);
   };
 
-  // Popup icon → open center modal
   const handlePopupClick = (id: string) => {
     setDrawerCallId(null);
     setModalCallId(id);
@@ -88,6 +141,12 @@ export function CallLogsPage() {
     setModalCallId(null);
   };
 
+  // Decide what to show in the table
+  const isIdMode = search.trim().length > 0;
+  const displayLogs = isIdMode ? (idSearchResult ?? []) : (data?.content ?? []);
+  const displayLoading = isIdMode ? idSearchLoading : listLoading;
+  const displayError = isIdMode ? idSearchError : listError;
+
   return (
     <>
       <div className="max-w-screen-2xl mx-auto px-6 py-6 space-y-4">
@@ -100,9 +159,14 @@ export function CallLogsPage() {
             </h1>
             <p className="text-sm text-gray-500 mt-0.5">View call history &amp; transcripts</p>
           </div>
-          {data && (
+          {!isIdMode && data && (
             <div className="text-sm text-gray-500">
               <span className="font-semibold text-gray-700">{data.totalElements.toLocaleString()}</span> total calls
+            </div>
+          )}
+          {isIdMode && !idSearchLoading && idSearchResult && (
+            <div className="text-sm text-gray-500">
+              <span className="font-semibold text-gray-700">{idSearchResult.length}</span> result{idSearchResult.length !== 1 ? 's' : ''} for ID search
             </div>
           )}
         </div>
@@ -113,8 +177,8 @@ export function CallLogsPage() {
           mobileNumber={mobileNumber}
           isMobile={isMobile}
           selectedIntents={selectedIntents}
-          loading={loading}
-          onSearchChange={setSearch}
+          loading={displayLoading}
+          onSearchChange={handleSearchChange}
           onMobileNumberChange={setMobileNumber}
           onIsMobileChange={setIsMobile}
           onIntentsChange={setSelectedIntents}
@@ -123,24 +187,26 @@ export function CallLogsPage() {
         />
 
         {/* Error Banner */}
-        {error && (
+        {displayError && (
           <div className="flex items-center gap-3 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-red-700">
             <AlertCircle className="w-5 h-5 shrink-0" />
-            <span className="text-sm flex-1">{error}</span>
-            <button
-              onClick={refetch}
-              className="flex items-center gap-1.5 text-sm font-medium hover:text-red-900 transition-colors"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              Retry
-            </button>
+            <span className="text-sm flex-1">{displayError}</span>
+            {!isIdMode && (
+              <button
+                onClick={refetch}
+                className="flex items-center gap-1.5 text-sm font-medium hover:text-red-900 transition-colors"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                Retry
+              </button>
+            )}
           </div>
         )}
 
         {/* Table */}
         <CallLogsTable
-          logs={data?.content ?? []}
-          loading={loading}
+          logs={displayLogs}
+          loading={displayLoading}
           pageNumber={pageNumber}
           pageSize={pageSize}
           activeCallId={activeCallId}
@@ -149,8 +215,8 @@ export function CallLogsPage() {
           onPopupClick={handlePopupClick}
         />
 
-        {/* Pagination */}
-        {data && data.totalPages > 0 && (
+        {/* Pagination — hidden when in ID search mode */}
+        {!isIdMode && data && data.totalPages > 0 && (
           <Pagination
             currentPage={pageNumber}
             totalPages={data.totalPages}

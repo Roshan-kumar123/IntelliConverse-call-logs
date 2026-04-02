@@ -2,6 +2,50 @@ import { useState } from 'react';
 import { ChevronDown, ChevronUp, Wrench, Zap } from 'lucide-react';
 import type { Turn } from '../../types';
 
+function pythonReprToJson(raw: string): string {
+  let s = raw.trim();
+  s = s.replace(/\bTrue\b/g, 'true').replace(/\bFalse\b/g, 'false').replace(/\bNone\b/g, 'null');
+  let result = '';
+  let i = 0;
+  while (i < s.length) {
+    const ch = s[i];
+    if (ch === "'") {
+      result += '"';
+      i++;
+      while (i < s.length) {
+        const c = s[i];
+        if (c === '\\' && i + 1 < s.length) { result += s[i] + s[i + 1]; i += 2; }
+        else if (c === '"') { result += '\\"'; i++; }
+        else if (c === "'") { result += '"'; i++; break; }
+        else { result += c; i++; }
+      }
+    } else { result += ch; i++; }
+  }
+  return result;
+}
+
+interface Formatted { display: string; copy: string; }
+
+function formatResponse(raw: string): Formatted {
+  if (!raw) return { display: raw, copy: raw };
+  try {
+    const pretty = JSON.stringify(JSON.parse(raw), null, 2);
+    return { display: pretty, copy: pretty };
+  } catch { /* */ }
+  const bodyMatch = raw.match(/^status=\d+\s+body=(.+)$/s);
+  if (bodyMatch) {
+    const bodyStr = bodyMatch[1].trim();
+    try { const p = JSON.stringify(JSON.parse(bodyStr), null, 2); return { display: p, copy: p }; } catch { /* */ }
+    try { const p = JSON.stringify(JSON.parse(pythonReprToJson(bodyStr)), null, 2); return { display: p, copy: p }; } catch { /* */ }
+    return { display: bodyStr, copy: JSON.stringify({ raw: bodyStr }, null, 2) };
+  }
+  try {
+    const pretty = JSON.stringify(JSON.parse(pythonReprToJson(raw)), null, 2);
+    return { display: pretty, copy: pretty };
+  } catch { /* */ }
+  return { display: raw, copy: JSON.stringify({ raw }, null, 2) };
+}
+
 interface TranscriptTurnProps {
   turn: Turn;
 }
@@ -22,15 +66,8 @@ function formatTimestamp(ts: string): string {
 
 function ToolCallInline({ tc }: { tc: Turn['tool_calls'][number] }) {
   const [expanded, setExpanded] = useState(false);
-  let argsFormatted = tc.arguments;
-  try {
-    argsFormatted = JSON.stringify(JSON.parse(tc.arguments), null, 2);
-  } catch { /* leave as-is */ }
-
-  let resultFormatted = tc.result;
-  try {
-    resultFormatted = JSON.stringify(JSON.parse(tc.result), null, 2);
-  } catch { /* leave as-is */ }
+  const args = formatResponse(tc.arguments);
+  const result = formatResponse(tc.result);
 
   return (
     <div className="border border-violet-100 rounded-lg overflow-hidden text-xs mt-1.5">
@@ -50,12 +87,12 @@ function ToolCallInline({ tc }: { tc: Turn['tool_calls'][number] }) {
         <div className="divide-y divide-gray-100 bg-white">
           <div className="px-3 py-2">
             <p className="text-gray-400 font-semibold uppercase tracking-wide text-[10px] mb-1">Arguments</p>
-            <pre className="text-gray-700 whitespace-pre-wrap break-all font-mono leading-relaxed overflow-x-auto max-h-48">{argsFormatted}</pre>
+            <pre className="text-gray-700 whitespace-pre-wrap break-all font-mono leading-relaxed overflow-x-auto max-h-48">{args.display}</pre>
           </div>
           <div className="px-3 py-2">
             <p className="text-gray-400 font-semibold uppercase tracking-wide text-[10px] mb-1">Result</p>
             <pre className="text-gray-600 whitespace-pre-wrap break-all font-mono leading-relaxed max-h-32 overflow-y-auto">
-              {resultFormatted.length > 400 ? resultFormatted.slice(0, 400) + '…' : resultFormatted}
+              {result.display}
             </pre>
           </div>
         </div>
