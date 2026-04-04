@@ -1,4 +1,5 @@
-import { PhoneCall, LogOut } from 'lucide-react';
+import { PhoneCall, LogOut, Radio } from 'lucide-react';
+import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
 function getInitials(name: string): string {
@@ -8,6 +9,23 @@ function getInitials(name: string): string {
     .slice(0, 2)
     .map((w) => w[0].toUpperCase())
     .join('');
+}
+
+function HeaderNav({ to, children }: { to: string; children: React.ReactNode }) {
+  return (
+    <NavLink
+      to={to}
+      className={({ isActive }) =>
+        `flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+          isActive
+            ? 'bg-blue-50 text-blue-700'
+            : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+        }`
+      }
+    >
+      {children}
+    </NavLink>
+  );
 }
 
 export function Header() {
@@ -25,6 +43,17 @@ export function Header() {
           </span>
           <span className="text-gray-300 text-sm mx-1">|</span>
           <span className="text-gray-500 text-sm">Analytics</span>
+
+          <nav className="flex items-center gap-1 ml-4">
+            <HeaderNav to="/calls">
+              <PhoneCall className="w-3.5 h-3.5" />
+              Call Logs
+            </HeaderNav>
+            <HeaderNav to="/live">
+              <Radio className="w-3.5 h-3.5" />
+              Live Calls
+            </HeaderNav>
+          </nav>
         </div>
 
         <div className="flex items-center gap-3">

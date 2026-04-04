@@ -6,6 +6,7 @@ import { Header } from './components/layout/Header';
 import { LoginPage } from './pages/LoginPage';
 import { CallLogsPage } from './pages/CallLogsPage';
 import { CallDetailPage } from './pages/CallDetailPage';
+import { LiveCallsPage } from './pages/LiveCallsPage';
 import { Loader2 } from 'lucide-react';
 
 function AppRoutes() {
@@ -44,6 +45,7 @@ function AppRoutes() {
           <Route path="/" element={<Navigate to="/calls" replace />} />
           <Route path="/calls" element={<CallLogsPage />} />
           <Route path="/calls/:id" element={<CallDetailPage />} />
+          <Route path="/live" element={<LiveCallsPage />} />
           <Route path="*" element={<Navigate to="/calls" replace />} />
         </Routes>
       </main>
