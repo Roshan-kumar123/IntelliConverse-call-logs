@@ -1,6 +1,8 @@
-import { Phone, Clock, Calendar, FileAudio, Hash, MessageSquare, Tag } from 'lucide-react';
+import { Phone, Clock, Calendar, FileAudio, Hash, MessageSquare, Tag, Download, FileText, Printer } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
 import type { CallDetail } from '../../types';
 import { TranscriptTurn } from './TranscriptTurn';
+import { downloadTranscriptTxt, printTranscriptPdf } from '../../utils/transcriptDownload';
 
 interface CallInfoTabProps {
   data: CallDetail;
@@ -73,6 +75,50 @@ function IntentAnalysisCard({ intentName, intentData }: { intentName: string; in
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function TranscriptDownloadMenu({ data }: { data: CallDetail }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition-colors shadow-sm"
+      >
+        <Download className="w-3.5 h-3.5" />
+        Download
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1.5 w-44 bg-white border border-gray-200 rounded-xl shadow-lg z-10 overflow-hidden">
+          <button
+            onClick={() => { downloadTranscriptTxt(data); setOpen(false); }}
+            className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            <FileText className="w-4 h-4 text-gray-400" />
+            Text (.txt)
+          </button>
+          <div className="border-t border-gray-100" />
+          <button
+            onClick={() => { printTranscriptPdf(data); setOpen(false); }}
+            className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            <Printer className="w-4 h-4 text-gray-400" />
+            PDF
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -155,11 +201,14 @@ export function CallInfoTab({ data }: CallInfoTabProps) {
       {/* Transcript */}
       {data.transcript?.length > 0 ? (
         <section>
-          <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
-            <div className="w-1 h-4 bg-violet-500 rounded-full" />
-            Transcript
-            <span className="text-xs text-gray-400 font-normal ml-1">({data.transcript.length} turns)</span>
-          </h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+              <div className="w-1 h-4 bg-violet-500 rounded-full" />
+              Transcript
+              <span className="text-xs text-gray-400 font-normal ml-1">({data.transcript.length} turns)</span>
+            </h3>
+            <TranscriptDownloadMenu data={data} />
+          </div>
           <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-5">
             {data.transcript.map((turn, idx) => (
               <div key={turn.speech_id || idx}>
